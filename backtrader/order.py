@@ -219,6 +219,30 @@ class OrderData(object):
         return obj
 
 
+class GenRef(object):
+    lock = threading.RLock()  # using lock for gen unique order ref identifier
+    timestamp = 0  # last order ref timestamp
+    seq = 0  # last order ref sequence
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(cls, '_instance'):
+            cls._instance = super().__new__(cls, *args, **kwargs)
+        return cls._instance
+
+    def getref(self):
+        with self.lock:
+            ts = int(datetime.datetime.now().strftime("%y%m%d%H%M%S"))
+            if self.timestamp == ts:
+                if self.seq == 99:
+                    raise Exception("Exceed limit requests in 1 second.")
+                self.seq += 1
+            else:
+                self.timestamp = ts
+                self.seq = 0
+
+            return int(f"{self.timestamp}{self.seq:0>2d}")
+
+
 class OrderBase(with_metaclass(MetaParams, object)):
     params = (
         ('owner', None), ('data', None),
@@ -300,7 +324,8 @@ class OrderBase(with_metaclass(MetaParams, object)):
         return '\n'.join(tojoin)
 
     def __init__(self):
-        self.ref = next(self.refbasis)
+        # self.ref = next(self.refbasis)
+        self.ref = GenRef().getref()
         self.broker = None
         self.info = AutoOrderedDict()
         self.comminfo = None
